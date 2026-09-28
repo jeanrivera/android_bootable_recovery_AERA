@@ -1,0 +1,67 @@
+cat << 'EOF' > .github/workflows/build.yml
+name: Build AERA Recovery
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell
+          sudo apt-get clean
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib \
+            gcc-multilib git gnupg gperf libxml2-utils openjdk-11-jdk python3 zip zlib1g-dev
+
+      - name: Install Repo Tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Initialize Manifest Workspace
+        env:
+          GIT_TERMINAL_PROMPT: 0
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+          
+          repo init -u https://github.com/AERA-Recovery/android_manifest -b aera-16.0 --depth=1 --no-repo-verify
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --no-manifest-update
+
+      - name: Inject Custom Recovery Source
+        uses: actions/checkout@v4
+        with:
+          path: bootable/recovery
+
+      - name: Clone OnePlus Infiniti Device Tree
+        run: |
+          mkdir -p device/oneplus/infiniti
+          git clone https://github.com/AERA-Recovery/android_device_oneplus_infiniti-AERA.git -b aera-16.0 device/oneplus/infiniti
+
+      - name: Build Recovery Image
+        run: |
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export BUILD_BROKEN_MISSING_REQUIRED_MODULES=true
+          source build/envsetup.sh
+          
+          # Force lunch with release flag or fallback combo
+          lunch aera_infiniti-ap1a-userdebug || lunch aera_infiniti-userdebug || lunch omni_infiniti-eng || true
+          
+          mka recoveryimage
+
+      - name: Upload Recovery Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AERA-Recovery-Infiniti
+          path: out/target/product/infiniti/*.img
+EOF
