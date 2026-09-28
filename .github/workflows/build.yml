@@ -1,3 +1,4 @@
+cat << 'EOF' > .github/workflows/build.yml
 name: Build AERA Recovery
 
 on:
@@ -49,9 +50,13 @@ jobs:
 
       - name: Build Recovery Image
         run: |
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export BUILD_BROKEN_MISSING_REQUIRED_MODULES=true
           source build/envsetup.sh
-          # Try standard lunch targets sequentially
-          lunch aera_infiniti-trunk_staging-userdebug || lunch aera_infiniti-userdebug || lunch omni_infiniti-userdebug
+          
+          # Force lunch with release flag or fallback combo
+          lunch aera_infiniti-ap1a-userdebug || lunch aera_infiniti-userdebug || lunch omni_infiniti-eng || true
+          
           mka recoveryimage
 
       - name: Upload Recovery Artifact
@@ -59,3 +64,4 @@ jobs:
         with:
           name: AERA-Recovery-Infiniti
           path: out/target/product/infiniti/*.img
+EOF
