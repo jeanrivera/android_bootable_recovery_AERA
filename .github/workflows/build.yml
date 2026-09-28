@@ -1,4 +1,3 @@
-cat << 'EOF' > .github/workflows/build.yml
 name: Build AERA Recovery
 
 on:
@@ -64,4 +63,3 @@ jobs:
         with:
           name: AERA-Recovery-Infiniti
           path: out/target/product/infiniti/*.img
-EOF
