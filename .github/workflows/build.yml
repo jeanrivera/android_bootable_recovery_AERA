@@ -19,7 +19,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential ccache git ninja-build cmake
 
-      - name: Verify WebScene file
+      - name: Locate web_scene.cpp
         run: |
-          echo "Verifying file location..."
-          ls -la aeraui/web_scene.cpp || ls -la aeraui/scenes/web_scene.cpp
+          echo "Searching for web_scene file across repository..."
+          find . -name "*web_scene*"
