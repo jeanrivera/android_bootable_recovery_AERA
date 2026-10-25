@@ -1,3 +1,21 @@
+if (pressed && !was_pressed) {
+    const int screen_width = lv_obj_get_width(s->screen);
+    const int edge = std::max(72, screen_width / 20);
+    if (!inside || (slot == 0 && (x <= edge || x >= screen_width - edge))) {
+      s->touch_ignored[slot] = true;
+      return false;
+    }
+    s->touch_pressed[slot] = true;
+    if (slot == 0) {
+```[cite: 15]
+
+---
+
+### Complete `web_scene.cpp`
+
+Replace the entire contents of your file with this complete, fully closed file:
+
+```cpp
 // SPDX-License-Identifier: Apache-2.0
 #include "scene.hpp"
 #include "../../core/operation_affinity.hpp"
@@ -193,12 +211,13 @@ void RefreshDownloads(WebScene *s) {
     auto *row = lv_obj_create(s->download_list);
     NoScroll(row);
     lv_obj_set_pos(row, 0, y);
-    lv_obj_set_size(row, width, 186);
+    lv_obj_set_size(row, width, 230);
     lv_obj_set_style_radius(row, 34, 0);
     lv_obj_set_style_bg_color(row, kMainPanel, 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_border_color(row, kMainLine, 0);
+
     auto *icon = Label(row,
         download.status == web::DownloadStatus::kFinished ? LV_SYMBOL_OK :
         download.status == web::DownloadStatus::kFailed ? LV_SYMBOL_WARNING :
@@ -208,12 +227,15 @@ void RefreshDownloads(WebScene *s) {
         download.status == web::DownloadStatus::kFinished ? kGreen :
         download.status == web::DownloadStatus::kFailed ? kRed : kAccent);
     lv_obj_set_pos(icon, 28, 30);
+
     auto *name = Label(row, download.name.c_str(),
                        &lv_font_montserrat_32, kText);
-    lv_obj_set_pos(name, 88, 24);
+    lv_obj_set_pos(name, 88, 20);
     lv_obj_set_width(name, width -
         (download.status == web::DownloadStatus::kActive ? 265 : 130));
-    lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+
+    lv_label_set_long_mode(name, LV_LABEL_LONG_WRAP);
+
     std::string detail;
     if (download.status == web::DownloadStatus::kActive) {
       detail = FormatBytes(download.received_bytes);
@@ -230,13 +252,15 @@ void RefreshDownloads(WebScene *s) {
     } else {
       detail = download.error.empty() ? "Download failed" : download.error;
     }
+
     auto *status = Label(row, detail.c_str(), &lv_font_montserrat_24,
                          kMutedStrong);
-    lv_obj_set_pos(status, 88, 78);
+    lv_obj_set_pos(status, 88, 120);
     lv_obj_set_width(status, width - 125);
     lv_label_set_long_mode(status, LV_LABEL_LONG_DOT);
+
     auto *progress = lv_bar_create(row);
-    lv_obj_set_pos(progress, 88, 137);
+    lv_obj_set_pos(progress, 88, 178);
     lv_obj_set_size(progress, width - 126, 10);
     lv_obj_set_style_bg_color(progress, kMainLine, 0);
     lv_obj_set_style_bg_opa(progress, LV_OPA_COVER, 0);
@@ -246,6 +270,7 @@ void RefreshDownloads(WebScene *s) {
     lv_bar_set_value(progress,
         download.status == web::DownloadStatus::kFinished ? 100 :
         static_cast<int>(download.progress), LV_ANIM_OFF);
+
     if (download.status == web::DownloadStatus::kActive) {
       auto *cancel = Button(row, LV_SYMBOL_CLOSE,
           [s, id = download.id] { s->session.CancelDownload(id); });
@@ -253,7 +278,8 @@ void RefreshDownloads(WebScene *s) {
       lv_obj_set_size(cancel, 112, 82);
       lv_obj_set_style_radius(cancel, 41, 0);
     }
-    y += 204;
+
+    y += 248;
   }
 }
 
@@ -319,8 +345,6 @@ void HideKeyboard(WebScene *s) {
   lv_obj_add_flag(s->keyboard, LV_OBJ_FLAG_HIDDEN);
   lv_keyboard_set_textarea(s->keyboard, nullptr);
   lv_obj_remove_state(s->address, LV_STATE_FOCUSED);
-  // Plugin navigation remains hidden; the global bottom-edge gesture owns
-  // switching away from the browser.
   s->web_keyboard = false;
 }
 
@@ -431,7 +455,6 @@ void ShowBrowserSettings(WebScene *s) {
       &lv_font_montserrat_24, kMutedStrong);
   lv_obj_set_pos(subtitle, 176, 106);
 
-  // LVGL resolves object geometry lazily; measure the resized overlay first.
   lv_obj_update_layout(overlay);
   const int content_width = std::min(1280, lv_obj_get_width(overlay) - 80);
   auto *content = lv_obj_create(overlay);
@@ -615,8 +638,6 @@ bool BrowserHandlePointer(int slot, int x, int y, bool pressed) {
       !s->session.Connected() || s->manager_open || s->settings_open ||
       (s->keyboard && !lv_obj_has_flag(s->keyboard, LV_OBJ_FLAG_HIDDEN)))
     return false;
-  // Quick Settings is a child overlay of the active browser screen. It must
-  // exclusively own every new tap/drag until its closing animation is gone.
   if (StatusBarShadeOpen()) {
     ResetBrowserTouches(s);
     return false;
@@ -625,9 +646,6 @@ bool BrowserHandlePointer(int slot, int x, int y, bool pressed) {
       x < s->view_left + s->view_width &&
       y < s->view_top + s->view_height;
   const bool was_pressed = s->touch_pressed[slot];
-  // Once another UI surface owns a contact (status shade, edge gesture,
-  // navigation, etc.), Browser must not capture that same finger when it
-  // later crosses into the web viewport. Release is the ownership boundary.
   if (s->touch_ignored[slot]) {
     if (!pressed) s->touch_ignored[slot] = false;
     return false;
@@ -729,8 +747,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
     s->persistent = auto_launch;
     if (auto_launch) gPersistentWebScene = s;
   }
-  // Recreate only the LVGL presentation. The verified runtime, WebKit worker,
-  // navigation state and downloads deliberately survive between scenes.
   gWebScene = s;
   s->auto_launch = auto_launch;
   s->screen = screen;
@@ -776,8 +792,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
   lv_obj_add_flag(s->web_progress, LV_OBJ_FLAG_HIDDEN);
   s->address = TextArea(screen);
   text_edit::SetSelectAllOnHold(s->address, true);
-  // LVGL's one-line setter derives a compact height. Apply it before the
-  // explicit browser-bar geometry so the field and Go button stay aligned.
   lv_textarea_set_one_line(s->address, true);
   lv_obj_set_pos(s->address, landscape ? 760 : 24, 188);
   lv_obj_set_size(s->address, landscape ? 2020 : 1168, 112);
@@ -824,7 +838,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
     lv_obj_set_style_radius(button, 53, 0);
     lv_obj_set_style_text_font(lv_obj_get_child(button, 0),
                                UiFont(&lv_font_montserrat_48), 0);
-    // Do not present navigation as functional before the isolated session exists.
     lv_obj_add_state(button, LV_STATE_DISABLED);
     lv_obj_set_style_opa(button, LV_OPA_40, LV_STATE_DISABLED);
   }
@@ -879,9 +892,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
   lv_obj_remove_flag(s->image, LV_OBJ_FLAG_CLICKABLE);
   s->descriptor.header.magic = LV_IMAGE_HEADER_MAGIC;
   s->descriptor.header.cf = LV_COLOR_FORMAT_ARGB8888;
-  // WebKit reuses this descriptor while replacing its pixel contents. Keep
-  // every frame on the OpenGL renderer, but never reuse a stale GPU texture.
-  // USER1 selects the OpenGL renderer's persistent streaming-texture path.
   s->descriptor.header.flags = LV_IMAGE_FLAGS_MODIFIABLE | LV_IMAGE_FLAGS_USER1;
   s->descriptor.header.w = web::kWidth; s->descriptor.header.h = web::kHeight;
   s->descriptor.header.stride = web::kWidth * 4;
@@ -890,8 +900,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
     const auto code = lv_event_get_code(e);
     if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING &&
         code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST) return;
-    // Screen DELETE frees the scene before its children are deleted. Ignore
-    // child lifecycle events before dereferencing their scene user-data.
     auto *s = static_cast<WebScene *>(lv_event_get_user_data(e));
     if (!s->session.Connected()) return;
     auto *input = lv_indev_active();
@@ -942,7 +950,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
       else if (const uint32_t codepoint = phone_keyboard::KeyCodepoint(key);
                codepoint >= 32)
         s->session.Send(web::Kind::kKey, 0, 0, codepoint);
-      // Mode selectors are keyboard UI, never injected as strings into a page.
     }
   }, LV_EVENT_ALL, s);
   if (!s->timer) s->timer = lv_timer_create([](lv_timer_t *timer) {
@@ -956,9 +963,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
       uint32_t keyboard_purpose = 0;
       const auto keyboard_request = s->session.TakeKeyboardRequest(&keyboard_purpose);
       if (!visible) {
-        // WebKit uses a two-buffer handshake. Consume and acknowledge hidden
-        // frames so its main loop and network downloads never stall merely
-        // because the Browser scene is not currently on screen.
         if (new_frame) s->session.AcknowledgeFrame();
       } else if (keyboard_request == web::KeyboardRequest::kShow) {
         ShowKeyboard(s, true, keyboard_purpose);
@@ -1016,9 +1020,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
       if (visible && s->last_status != s->session.Status()) {
         s->last_status = s->session.Status();
         i18n::BindLabel(s->detail, s->last_status.c_str());
-        // The editable field is the only address display. Track redirects,
-        // history navigation and same-document URL changes unless the user is
-        // actively replacing its contents.
         const auto current_address = web::Address(s->last_status);
         if (!current_address.empty() &&
             !lv_obj_has_state(s->address, LV_STATE_FOCUSED))
@@ -1109,9 +1110,6 @@ void BuildWebScene(lv_obj_t *screen, ActionCallback callback, void *context,
       lv_textarea_set_text(s->address, current_address.c_str());
   }
 
-  // Opening Browser is the user's explicit request to use the engine. Begin
-  // verification immediately instead of depending on a second tap in the
-  // large content panel; manual mode remains available to the host UI tests.
   if (s->auto_launch) Prepare(s);
 }
 }  // namespace aeraui
