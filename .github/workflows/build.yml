@@ -1,0 +1,26 @@
+YAML
+name: Build AERA UI Module
+
+on:
+  push:
+    branches: [ "aera-16.0", "16.0", "main" ]
+  pull_request:
+    branches: [ "aera-16.0", "16.0", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache git ninja-build cmake
+
+      - name: Verify WebScene file
+        run: |
+          echo "Verifying file location..."
+          ls -la aeraui/web_scene.cpp || ls -la aeraui/scenes/web_scene.cpp
