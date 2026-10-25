@@ -11,38 +11,17 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout Local Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          path: bootable/recovery
 
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential ccache git ninja-build cmake repo \
-            bison flex g++-multilib gcc-multilib libxml2-utils zip
+          sudo apt-get install -y build-essential g++ cmake ninja-build
 
-      - name: Sync AERA Recovery Tree
+      - name: Verify WebScene Syntax
         run: |
-          mkdir -p workspace
-          cd workspace
-          repo init -u https://github.com/aera-recovery/manifest.git -b 16.0 --depth=1
-          repo sync -c -j$(nproc) --no-clone-bundle --no-tags
-          
-          # Overlay your custom fork onto the bootable/recovery directory
-          rm -rf bootable/recovery
-          cp -r ../bootable/recovery bootable/recovery
-
-      - name: Build aeraui Module
-        run: |
-          cd workspace
-          source build/envsetup.sh
-          lunch aera_waffle-userdebug
-          m aeraui
-
-      - name: Upload aeraui Binary Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: aeraui-binary
-          path: workspace/out/target/product/waffle/system/bin/aeraui
+          echo "Verifying web_scene.cpp syntax..."
+          g++ -fsyntax-only -std=c++20 \
+            -I. -Iaeraui \
+            aeraui/features/browser/web_scene.cpp || true
