@@ -21,12 +21,20 @@ enum class Operation {
   kCompress,
   kArchiveAdd,
   kArchiveDelete,
+  kChecksum,
 };
+
 enum class Conflict { kReplace, kKeepBoth, kSkip };
+
+enum class ChecksumType {
+  kMD5,
+  kSHA256,
+};
 
 struct Request {
   Operation operation = Operation::kCopy;
   Conflict conflict = Conflict::kKeepBoth;
+  ChecksumType checksum_type = ChecksumType::kSHA256;
   std::vector<std::string> sources;
   std::string destination;
   // Archive member paths are relative to the archive root. An empty list
@@ -101,6 +109,7 @@ struct Snapshot {
   size_t skipped = 0;
   std::string status;
   std::string detail;
+  std::string checksum;
 };
 
 struct Progress {
@@ -119,6 +128,7 @@ struct Progress {
   mutable std::mutex text_mutex;
   std::string status;
   std::string detail;
+  std::string checksum;
 
   void Reset();
   Snapshot Get() const;
@@ -142,6 +152,7 @@ bool ReadText(const std::string& path, uint64_t maximum_bytes, std::string& text
 bool WriteTextAtomic(const std::string& path, const std::string& text, std::string& error);
 bool CreateDirectory(const std::string& path, std::string& error);
 bool Rename(const std::string& source, const std::string& destination, std::string& error);
+std::string CalculateChecksum(const std::string& path, ChecksumType type, std::string& error);
 void Run(const Request& request, Progress& progress);
 
 }  // namespace aeraui::file_manager
